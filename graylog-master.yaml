@@ -1,0 +1,87 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: graylog-master
+spec:
+  serviceName: "graylog-master"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        role: graylog-master
+        graylog: "true"
+    spec:
+      terminationGracePeriodSeconds: 70
+      affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: role
+                  operator: In
+                  values:
+                  - graylog-slave
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: graylog-master
+          image: graylog2/server:2.3.0-1
+          env:
+          - name: GRAYLOG_PASSWORD_SECRET
+            value: "xxxxxx"
+          - name: GRAYLOG_ROOT_PASSWORD_SHA2
+            value: "xxxx"
+          - name: GRAYLOG_MONGODB_URI
+            value: "mongodb://mongo-mongodb-replicaset-0.mongo-mongodb-replicaset:27017,mongo-mongodb-replicaset-1.mongo-mongodb-replicaset.mongo:27017,mongo-mongodb-replicaset-2.mongo-mongodb-replicaset:27017/graylog?replicaSet=rs0"
+          - name: GRAYLOG_IS_MASTER
+            value: "true"
+          - name: GRAYLOG_ELASTICSEARCH_DISCOVERY_ZEN_PING_UNICAST_HOSTS
+            value: "elasticsearch-0.elasticsearch.default.svc.cluster.local:9300, elasticsearch-1.elasticsearch.default.svc.cluster.local:9300, elasticsearch-2.elasticsearch.default.svc.cluster.local:9300"
+          - name: GRAYLOG_ELASTICSEARCH_HOSTS
+            value: "http://elasticsearch-0.elasticsearch.default.svc.cluster.local:9200, http://elasticsearch-1.elasticsearch.default.svc.cluster.local:9200, http://elasticsearch-2.elasticsearch.default.svc.cluster.local:9200"
+          - name: GRAYLOG_WEB_ENDPOINT_URI
+            value: "http://domain.com:31300/api"
+          - name: GRAYLOG_REST_LISTEN_URI
+            value: "http://0.0.0.0:9000/api/"
+          - name: GRAYLOG_WEB_LISTEN_URI
+            value: "http://0.0.0.0:9000/"
+          - name: GRAYLOG_REST_TRANSPORT_URI
+            value: "http://graylog-master.default.svc.cluster.local:9000/api/"
+          - name: GRAYLOG_SERVER_JAVA_OPTS
+            value: "-Xms1g -Xmx1g -XX:NewRatio=1 -XX:MaxMetaspaceSize=256m -server -XX:+ResizeTLAB -XX:+UseConcMarkSweepGC -XX:+CMSConcurrentMTEnabled -XX:+CMSClassUnloadingEnabled -XX:+UseParNewGC -XX:-OmitStackTraceInFastThrow"
+          ports:
+          - containerPort: 9000
+            name: http
+          - containerPort: 12201
+            name: udp-input
+          - containerPort: 1514
+            name: tcp-input
+          volumeMounts:
+          - name: graylog-persistent-storage
+            mountPath: /usr/share/graylog/data/journal
+            subPath: graylog
+          resources:
+            requests:
+              cpu: .25
+              memory: 1536Mi
+            limits:
+              cpu: 1.5
+              memory: 2048Mi
+          readinessProbe:
+            httpGet:
+              path: /api/system/lbstatus
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 3
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 2
+  volumeClaimTemplates:
+  - metadata:
+      name: graylog-persistent-storage
+      annotations:
+        volume.beta.kubernetes.io/storage-class: "fast"
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi

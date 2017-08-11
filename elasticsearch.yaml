@@ -1,0 +1,63 @@
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+spec:
+  serviceName: "elasticsearch"
+  replicas: 3
+  podManagementPolicy: Parallel
+  template:
+    metadata:
+      labels:
+        role: elasticsearch
+    spec:
+      terminationGracePeriodSeconds: 10
+      affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: role
+                  operator: In
+                  values:
+                  - elasticsearch
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: elasticsearch
+          image: elasticsearch:2
+          command:
+          - elasticsearch
+          - "-Ddiscovery.zen.ping.unicast.hosts=elasticsearch-0.elasticsearch,elasticsearch-1.elasticsearch,elasticsearch-2.elasticsearch"
+          - "-Ddiscovery.zen.minimum_master_nodes=2"
+          - "-Ddiscovery.zen.ping.unicast.hosts.resolve_timeout=30s"
+          - "-Ddiscovery.zen.ping_timeout=30s"
+          - "-Des.insecure.allow.root=true"
+          - "-Dcluster.name=graylog"
+          env:
+          - name: ES_JAVA_OPTS
+            value: "-Xms2g -Xmx2g"
+          ports:
+          - containerPort: 9200
+            name: http
+          - containerPort: 9300
+            name: transport
+          volumeMounts:
+          - name: elasticsearch-persistent-storage
+            mountPath: /usr/share/elasticsearch/data
+          resources:
+            requests:
+              cpu: .10
+              memory: 2560Mi
+            limits:
+              cpu: .75
+              memory: 3072Mi
+  volumeClaimTemplates:
+  - metadata:
+      name: elasticsearch-persistent-storage
+      annotations:
+        volume.beta.kubernetes.io/storage-class: "standard"
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 200Gi

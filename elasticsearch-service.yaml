@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  labels:
+    name: elasticsearch
+spec:
+  selector:
+    role: elasticsearch
+  ports:
+  - name: http
+    protocol: TCP
+    port: 9200
+    targetPort: 9200
+  - name: transport
+    protocol: TCP
+    port: 9300
+    targetPort: 9300
+  clusterIP: None
